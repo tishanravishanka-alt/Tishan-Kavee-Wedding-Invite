@@ -483,7 +483,7 @@
                         </div>
                         <h3 class="font-serif text-3xl font-semibold text-charcoal">Thank You, <span id="confirmedGuestName" class="text-gold-dark"></span>!</h3>
                         <p class="text-sm text-taupe max-w-md mx-auto mt-2">
-                            Your response has been recorded in Tishan &amp; Kaveesha's wedding guestbook. We look forward to celebrating with you in Kadawatha on July 9, 2027.
+                            Your response has been sent to Tishan &amp; Kaveesha and recorded in our wedding guestbook. We look forward to celebrating with you in Kadawatha on July 9, 2027.
                         </p>
                         <button onclick="resetRsvpForm()" class="mt-6 text-xs uppercase tracking-widest font-semibold text-gold-dark hover:text-charcoal underline">
                             Submit Another Response
@@ -755,14 +755,16 @@
         </div>
     </main>
 
-    <!-- ==================== FIREBASE & APPLICATION LOGIC ==================== -->
+    <!-- ==================== WEB3FORMS & APPLICATION LOGIC ==================== -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Web3Forms Access Key connected to Tishan & Kaveesha's Gmail
+        const WEB3FORMS_ACCESS_KEY = '87f9e4e5-4398-488c-af20-1843d42f3feb';
+
         // -------------------- 1. INITIAL SAMPLE DATA --------------------
-        // Pre-populated realistic Sri Lankan wedding guests so the Admin Dashboard & Wishes Wall look rich immediately
         const SAMPLE_GUESTS = [
             {
                 id: 'sample-1',
@@ -906,7 +908,6 @@
                     auth = getAuth(app);
                     db = getFirestore(app);
 
-                    // RULE 3: Authenticate BEFORE querying
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                         await signInWithCustomToken(auth, __initial_auth_token);
                     } else {
@@ -915,7 +916,6 @@
                     currentUser = auth.currentUser;
 
                     if (currentUser) {
-                        // RULE 1 & 2: Strict public collection path, simple collection query
                         const rsvpCol = collection(db, 'artifacts', appId, 'public', 'data', 'wedding_rsvps');
                         onSnapshot(rsvpCol, (snapshot) => {
                             liveGuests = [];
@@ -934,7 +934,6 @@
         }
 
         function mergeAndRefreshAllViews() {
-            // Sort live guests newest first, followed by sample entries
             const sortedLive = [...liveGuests].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
             allGuests = [...sortedLive, ...SAMPLE_GUESTS];
             renderWishesWall();
@@ -950,13 +949,9 @@
                 const isEven = idx % 2 === 0;
                 return `
                 <div class="relative flex flex-col md:flex-row items-start md:items-center ${isEven ? 'md:flex-row-reverse' : ''} gap-4 md:gap-8 pl-14 md:pl-0">
-                    
-                    <!-- Center / Left Gold Medallion Icon -->
                     <div class="absolute left-6 md:left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-white border-2 border-gold shadow-md flex items-center justify-center text-gold-dark z-10">
                         <i class="fa-solid ${item.icon} text-sm"></i>
                     </div>
-
-                    <!-- Content Card -->
                     <div class="w-full md:w-[calc(50%-2.25rem)] bg-white border border-gold/30 hover:border-gold/70 rounded-2xl p-5 sm:p-6 shadow-sm transition-all">
                         <div class="flex items-center justify-between gap-2 mb-1.5">
                             <span class="inline-block bg-cream text-gold-deep text-xs font-semibold px-3 py-1 rounded-full border border-gold/30">
@@ -967,8 +962,6 @@
                         <h3 class="font-serif text-2xl font-semibold text-charcoal mt-1">${item.title}</h3>
                         <p class="text-xs sm:text-sm text-taupe mt-1.5 leading-relaxed">${item.desc}</p>
                     </div>
-
-                    <!-- Spacer for opposite side on desktop -->
                     <div class="hidden md:block md:w-[calc(50%-2.25rem)]"></div>
                 </div>
                 `;
@@ -996,7 +989,6 @@
 
         // -------------------- 5. COUNTDOWN TIMER TO JULY 9, 2027 --------------------
         function startCountdown() {
-            // July 9, 2027 at 09:30 AM Sri Lanka Time (UTC+5:30)
             const weddingDate = new Date('2027-07-09T09:30:00+05:30').getTime();
 
             function update() {
@@ -1026,7 +1018,7 @@
             setInterval(update, 1000);
         }
 
-        // -------------------- 6. RSVP FORM HANDLERS --------------------
+        // -------------------- 6. RSVP FORM HANDLERS (WITH WEB3FORMS) --------------------
         window.toggleAttendanceFields = function(isAttending) {
             const fields = document.getElementById('attendingOnlyFields');
             if (isAttending) {
@@ -1050,7 +1042,7 @@
             e.preventDefault();
             const btn = document.getElementById('rsvpSubmitBtn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Recording RSVP...</span>';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Sending RSVP...</span>';
 
             const attending = document.querySelector('input[name="attending"]:checked').value;
             const name = document.getElementById('guestName').value.trim();
@@ -1072,11 +1064,38 @@
             };
 
             try {
+                // 1. Send notification email via Web3Forms
+                const response = await fetch('https://api.web3forms.com/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        access_key: WEB3FORMS_ACCESS_KEY,
+                        subject: `Wedding RSVP: ${name} (${attending}) — Tishan & Kaveesha`,
+                        from_name: 'Tishan & Kaveesha Wedding Invite',
+                        guest_name: name,
+                        phone_number: phone,
+                        attendance_status: attending,
+                        adults_count: adults,
+                        children_count: children,
+                        total_guests: adults + children,
+                        drinks_preference: drink,
+                        blessing_message: wish || 'No message provided'
+                    })
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.message || 'Web3Forms submission failed');
+                }
+
+                // 2. Save to Firebase if configured, or local list
                 if (db && currentUser) {
                     const rsvpCol = collection(db, 'artifacts', appId, 'public', 'data', 'wedding_rsvps');
                     await addDoc(rsvpCol, newEntry);
                 } else {
-                    // Fallback immediate state update
                     liveGuests.unshift({ id: 'local-' + Date.now(), isSample: false, ...newEntry });
                     mergeAndRefreshAllViews();
                 }
@@ -1084,16 +1103,10 @@
                 document.getElementById('confirmedGuestName').textContent = name;
                 document.getElementById('rsvpForm').classList.add('hidden');
                 document.getElementById('rsvpSuccessState').classList.remove('hidden');
-                showToast('RSVP Confirmed', `Thank you ${name}! Your response has been saved.`);
+                showToast('RSVP Sent to Gmail', `Thank you ${name}! Your RSVP has been emailed to Tishan & Kaveesha.`);
             } catch (err) {
-                console.error('Error saving RSVP:', err);
-                // Fallback so user experience is never blocked
-                liveGuests.unshift({ id: 'local-' + Date.now(), isSample: false, ...newEntry });
-                mergeAndRefreshAllViews();
-                document.getElementById('confirmedGuestName').textContent = name;
-                document.getElementById('rsvpForm').classList.add('hidden');
-                document.getElementById('rsvpSuccessState').classList.remove('hidden');
-                showToast('RSVP Recorded', `Thank you ${name}! Your response has been saved.`);
+                console.error('Error submitting RSVP:', err);
+                showToast('Submission Error', 'Could not send RSVP right now. Please try again in a moment.');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> <span>Submit RSVP & Blessings</span>';
@@ -1205,7 +1218,6 @@
         };
 
         window.renderAdminDashboard = function() {
-            // 1. Compute Stats
             let totalAdults = 0;
             let totalChildren = 0;
             let attendingParties = 0;
@@ -1243,7 +1255,6 @@
             document.getElementById('statChildrenCount').textContent = totalChildren;
             document.getElementById('statDeclinedCount').textContent = declinedParties;
 
-            // 2. Render Drinks Bars
             const drinksContainer = document.getElementById('drinksChartContainer');
             const maxDrink = Math.max(...Object.values(drinkTallies), 1);
 
@@ -1262,7 +1273,6 @@
                 `;
             }).join('');
 
-            // 3. Filter & Render Table
             const query = (document.getElementById('adminSearchInput')?.value || '').toLowerCase();
             const statusFilter = document.getElementById('adminStatusFilter')?.value || 'ALL';
             const drinkFilter = document.getElementById('adminDrinkFilter')?.value || 'ALL';
